@@ -32,3 +32,19 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# dependencies
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
