@@ -2,91 +2,73 @@ import React, { useState } from 'react';
 
 const skillCategories = [
   {
-    category: 'Programming',
-    icon: '⬡',
-    skills: ['Python', 'JavaScript', 'Java', 'C/C++', 'SQL'],
+    category: 'Programming & Development',
+    skills: ['JavaScript / TypeScript', 'Python', 'Java / Kotlin', 'React / Angular / Vue', 'Node.js / Backend Dev', 'SQL / Databases'],
   },
   {
     category: 'Data & Analytics',
-    icon: '◎',
-    skills: ['Data Analysis', 'Machine Learning', 'Statistics', 'Data Visualization', 'Big Data'],
+    skills: ['Data Analysis', 'Machine Learning / AI', 'Data Visualization', 'Statistics & Probability'],
   },
   {
-    category: 'DevOps & Cloud',
-    icon: '⟁',
-    skills: ['Docker', 'Kubernetes', 'AWS/Azure/GCP', 'CI/CD Pipelines', 'Linux'],
+    category: 'Infrastructure & DevOps',
+    skills: ['Cloud Platforms (AWS/Azure/GCP)', 'Docker & Kubernetes', 'CI/CD Pipelines', 'Linux / System Admin'],
   },
   {
-    category: 'Web Development',
-    icon: '◈',
-    skills: ['HTML/CSS', 'React/Angular/Vue', 'Node.js', 'REST APIs', 'Databases'],
+    category: 'Soft Skills',
+    skills: ['Problem Solving', 'Communication', 'Teamwork & Collaboration', 'Time Management', 'Leadership'],
   },
 ];
 
-const careerRequirements = {
-  'Software Engineer':    { Python: 3, JavaScript: 4, Java: 3, 'HTML/CSS': 3, 'React/Angular/Vue': 3, 'REST APIs': 3, Databases: 3, 'CI/CD Pipelines': 2 },
-  'Data Analyst':         { Python: 3, SQL: 4, 'Data Analysis': 4, 'Statistics': 3, 'Data Visualization': 4 },
-  'ML/AI Engineer':       { Python: 5, 'Machine Learning': 4, 'Statistics': 4, 'Data Analysis': 3, 'Big Data': 3 },
-  'DevOps Engineer':      { Docker: 4, Kubernetes: 4, 'AWS/Azure/GCP': 4, 'CI/CD Pipelines': 5, Linux: 4 },
-  'Full Stack Developer': { JavaScript: 4, 'HTML/CSS': 4, 'React/Angular/Vue': 4, 'Node.js': 4, Databases: 3, 'REST APIs': 4 },
-};
-
-function computeScores(ratings) {
-  const scores = {};
-  for (const [career, reqs] of Object.entries(careerRequirements)) {
-    const keys = Object.keys(reqs);
-    let total = 0;
-    for (const skill of keys) {
-      const userLevel = ratings[skill] || 0;
-      const reqLevel = reqs[skill];
-      total += Math.min(userLevel / reqLevel, 1);
-    }
-    scores[career] = Math.round((total / keys.length) * 100);
-  }
-  return scores;
-}
+const levels = ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'];
 
 export default function SkillAssessment({ navigate, user, onComplete, assessmentData }) {
+  const initial = {};
+  skillCategories.forEach(cat => cat.skills.forEach(s => { initial[s] = assessmentData?.skills?.[s] ?? 0; }));
+
+  const [scores, setScores] = useState(initial);
   const [step, setStep] = useState(0);
-  const [ratings, setRatings] = useState({});
+  const [done, setDone] = useState(!!assessmentData);
+  const [gpa, setGpa] = useState(assessmentData?.gpa || '');
+  const [quals, setQuals] = useState(assessmentData?.quals || '');
 
-  const cat = skillCategories[step];
-  const totalSteps = skillCategories.length;
-  const progress = ((step) / totalSteps) * 100;
+  const totalSteps = skillCategories.length + 1; // +1 for academic info
+  const progress = Math.round(((step) / totalSteps) * 100);
 
-  const handleRate = (skill, level) => {
-    setRatings(prev => ({ ...prev, [skill]: level }));
+  const handleComplete = () => {
+    const allSkills = {};
+    let total = 0, count = 0;
+    skillCategories.forEach(cat => cat.skills.forEach(s => {
+      allSkills[s] = scores[s];
+      total += scores[s];
+      count++;
+    }));
+    const overallScore = Math.round((total / (count * 4)) * 100);
+
+    const careerScores = {
+      'Software Engineer': Math.round((((scores['JavaScript / TypeScript'] || 0) + (scores['React / Angular / Vue'] || 0) + (scores['Node.js / Backend Dev'] || 0) + (scores['Problem Solving'] || 0)) / 16) * 100),
+      'Data Analyst': Math.round((((scores['Data Analysis'] || 0) + (scores['Statistics & Probability'] || 0) + (scores['SQL / Databases'] || 0) + (scores['Python'] || 0)) / 16) * 100),
+      'ML/AI Engineer': Math.round((((scores['Machine Learning / AI'] || 0) + (scores['Python'] || 0) + (scores['Data Analysis'] || 0) + (scores['Statistics & Probability'] || 0)) / 16) * 100),
+      'DevOps Engineer': Math.round((((scores['Cloud Platforms (AWS/Azure/GCP)'] || 0) + (scores['Docker & Kubernetes'] || 0) + (scores['CI/CD Pipelines'] || 0) + (scores['Linux / System Admin'] || 0)) / 16) * 100),
+      'Full Stack Developer': Math.round((((scores['JavaScript / TypeScript'] || 0) + (scores['React / Angular / Vue'] || 0) + (scores['SQL / Databases'] || 0) + (scores['Node.js / Backend Dev'] || 0)) / 16) * 100),
+    };
+    const topCareer = Object.entries(careerScores).sort((a, b) => b[1] - a[1])[0][0];
+    const gapCount = skillCategories.flatMap(c => c.skills).filter(s => (scores[s] || 0) < 2).length;
+
+    onComplete({ skills: allSkills, overallScore, careerScores, topCareer, gapCount, gpa, quals });
+    setDone(true);
   };
 
-  const handleNext = () => {
-    if (step < totalSteps - 1) {
-      setStep(s => s + 1);
-    } else {
-      const careerScores = computeScores(ratings);
-      const sorted = Object.entries(careerScores).sort((a, b) => b[1] - a[1]);
-      const result = {
-        ratings,
-        careerScores,
-        topCareer: sorted[0][0],
-        overallScore: Math.round(sorted.reduce((sum, [, s]) => sum + s, 0) / sorted.length),
-        gapCount: Object.values(ratings).filter(v => v < 3).length,
-        completedAt: new Date().toISOString(),
-      };
-      onComplete(result);
-      navigate('career-recommendation');
-    }
-  };
-
-  if (assessmentData) {
+  if (done) {
     return (
       <div style={pageStyle}>
-        <div style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center', padding: '80px 20px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>◈</div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', marginBottom: '12px' }}>Assessment Already Completed</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>You've already completed your skill assessment. View your results or retake it.</p>
+        <PageHeader title="Skill Assessment" subtitle="Your assessment is complete" navigate={navigate} back="dashboard" />
+        <div style={{ maxWidth: 600, margin: '40px auto', textAlign: 'center', padding: '0 20px' }}>
+          <div style={{ fontSize: '60px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>✦</div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, marginBottom: '12px', background: 'linear-gradient(135deg,var(--primary-light),var(--secondary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Assessment Complete!</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Your skill profile has been saved. Explore your career recommendations and identify gaps.</p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => navigate('career-recommendation')} style={primaryBtn}>View Recommendations →</button>
-            <button onClick={() => { onComplete(null); setStep(0); setRatings({}); }} style={ghostBtn}>Retake Assessment</button>
+            <NavBtn onClick={() => navigate('career-recommendation')} primary>View Recommendations →</NavBtn>
+            <NavBtn onClick={() => { setDone(false); setStep(0); }}>Redo Assessment</NavBtn>
           </div>
         </div>
       </div>
@@ -95,112 +77,146 @@ export default function SkillAssessment({ navigate, user, onComplete, assessment
 
   return (
     <div style={pageStyle}>
+      <PageHeader title="Skill Assessment" subtitle="Rate your proficiency in each skill area" navigate={navigate} back="dashboard" />
+
+      <div style={{ maxWidth: 700, margin: '0 auto 24px', padding: '0 20px', display: 'flex', justifyContent: 'flex-end' }}>
+        <input type="file" id="cv-upload" style={{ display: 'none' }} accept=".pdf,.txt" onChange={async (e) => {
+          if (!e.target.files[0]) return;
+          try {
+            const { uploadCV } = await import('../api');
+            const data = await uploadCV(e.target.files[0]);
+            if (data.skills) {
+              setScores(prev => ({ ...prev, ...data.skills })); alert('CV parsed and skills auto-filled successfully!');
+            }
+          } catch (err) {
+            console.error('CV Upload Error:', err); alert('Failed to parse CV: ' + (err.message || 'Unknown error'));
+          }
+        }} />
+        <label htmlFor="cv-upload" style={{
+          background: 'rgba(79,70,229,0.1)', color: 'var(--primary)',
+          padding: '10px 16px', borderRadius: '8px', cursor: 'pointer',
+          fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px',
+          border: '1px solid rgba(79,70,229,0.3)'
+        }}>
+          <span></span> Upload CV to Auto-fill
+        </label>
+      </div>
+      {/* Progress */}
+      <div style={{ maxWidth: 700, margin: '0 auto 32px', padding: '0 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Step {step + 1} of {totalSteps}</span>
+          <span style={{ fontSize: '13px', color: 'var(--primary-light)', fontWeight: 600 }}>{progress}% Complete</span>
+        </div>
+        <div style={{ height: 6, background: 'rgba(79,70,229,0.15)', borderRadius: 3 }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, var(--primary), var(--secondary))', borderRadius: 3, transition: 'width 0.4s ease' }} />
+        </div>
+      </div>
+
+      {/* Step Content */}
       <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 20px' }}>
-        <button onClick={() => navigate('dashboard')} style={backBtn}>← Back to Dashboard</button>
+        {step < skillCategories.length ? (
+          <SkillCategoryStep
+            category={skillCategories[step]}
+            scores={scores}
+            onScore={(skill, val) => setScores(p => ({ ...p, [skill]: val }))}
+          />
+        ) : (
+          <AcademicStep gpa={gpa} setGpa={setGpa} quals={quals} setQuals={setQuals} />
+        )}
 
-        {/* Header */}
-        <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, marginBottom: '6px' }}>Skill Assessment</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Rate your proficiency in each skill from 1 (Beginner) to 5 (Expert)</p>
-        </div>
-
-        {/* Progress */}
-        <div style={{ marginBottom: '32px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-            <span>Step {step + 1} of {totalSteps}</span>
-            <span>{Math.round(progress)}% complete</span>
-          </div>
-          <div style={{ height: 6, background: 'rgba(79,70,229,0.15)', borderRadius: 3 }}>
-            <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, var(--primary), var(--secondary))', borderRadius: 3, transition: 'width 0.5s ease' }} />
-          </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-            {skillCategories.map((c, i) => (
-              <div key={i} style={{
-                flex: 1, height: 4, borderRadius: 2,
-                background: i < step ? 'var(--primary)' : i === step ? 'var(--secondary)' : 'rgba(79,70,229,0.15)',
-                transition: 'background 0.3s ease',
-              }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Category Card */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(129,140,248,0.25)', borderRadius: '20px', padding: '32px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-            <div style={{ width: 48, height: 48, borderRadius: '12px', background: 'rgba(79,70,229,0.15)', border: '1px solid rgba(129,140,248,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>
-              {cat.icon}
-            </div>
-            <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700 }}>{cat.category}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{cat.skills.length} skills to rate</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {cat.skills.map(skill => (
-              <SkillRater key={skill} skill={skill} value={ratings[skill] || 0} onChange={level => handleRate(skill, level)} />
-            ))}
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button
-            onClick={() => setStep(s => Math.max(0, s - 1))}
-            disabled={step === 0}
-            style={{ ...ghostBtn, opacity: step === 0 ? 0.4 : 1, cursor: step === 0 ? 'not-allowed' : 'pointer' }}
-          >
-            ← Previous
-          </button>
-          <button onClick={handleNext} style={primaryBtn}>
-            {step === totalSteps - 1 ? 'Complete Assessment ✓' : 'Next Category →'}
-          </button>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '32px', justifyContent: 'flex-end' }}>
+          {step > 0 && <NavBtn onClick={() => setStep(s => s - 1)}>← Back</NavBtn>}
+          {step < totalSteps - 1 ? (
+            <NavBtn onClick={() => setStep(s => s + 1)} primary>Next →</NavBtn>
+          ) : (
+            <NavBtn onClick={handleComplete} primary>Complete Assessment ✦</NavBtn>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function SkillRater({ skill, value, onChange }) {
-  const labels = ['', 'Beginner', 'Basic', 'Intermediate', 'Advanced', 'Expert'];
-  const colors = ['', '#ef4444', '#f59e0b', '#eab308', '#3b82f6', '#10b981'];
-
+function SkillCategoryStep({ category, scores, onScore }) {
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>{skill}</span>
-        {value > 0 && (
-          <span style={{ fontSize: '12px', color: colors[value], fontWeight: 600, background: `${colors[value]}18`, padding: '2px 10px', borderRadius: '100px' }}>
-            {labels[value]}
-          </span>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        {[1, 2, 3, 4, 5].map(level => (
-          <button
-            key={level}
-            onClick={() => onChange(level)}
-            style={{
-              flex: 1, height: 36, borderRadius: '8px', cursor: 'pointer',
-              border: value >= level ? 'none' : '1px solid rgba(79,70,229,0.2)',
-              background: value >= level
-                ? `linear-gradient(135deg, ${colors[level]}, ${colors[Math.min(level + 1, 5)]})`
-                : 'rgba(79,70,229,0.05)',
-              color: value >= level ? '#fff' : 'var(--text-muted)',
-              fontSize: '13px', fontWeight: 600,
-              transition: 'all 0.2s ease',
-              transform: value === level ? 'scale(1.05)' : 'scale(1)',
-            }}
-          >
-            {level}
-          </button>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '28px' }}>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>{category.category}</h2>
+      <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>Rate your proficiency level for each skill.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {category.skills.map(skill => (
+          <div key={skill}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>{skill}</span>
+              <span style={{ fontSize: '13px', color: 'var(--primary-light)', fontWeight: 600 }}>{['None','Beginner','Intermediate','Advanced','Expert'][scores[skill] || 0]}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {[0, 1, 2, 3, 4].map(val => (
+                <button key={val} onClick={() => onScore(skill, val)} style={{
+                  flex: 1, height: 36, borderRadius: '8px', border: 'none', cursor: 'pointer',
+                  background: (scores[skill] || 0) >= val ? `rgba(${79 + val * 20}, ${70 + val * 10}, 229, ${0.3 + val * 0.15})` : 'rgba(79,70,229,0.07)',
+                  borderBottom: (scores[skill] || 0) === val ? '2px solid var(--primary-light)' : '2px solid transparent',
+                  transition: 'all 0.2s',
+                  fontSize: '11px', color: (scores[skill] || 0) >= val ? 'var(--primary-light)' : '#475569',
+                  fontWeight: (scores[skill] || 0) === val ? 700 : 400,
+                }}>{['None','Beg.','Inter.','Adv.','Expert'][val]}</button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
+function AcademicStep({ gpa, setGpa, quals, setQuals }) {
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '28px' }}>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Academic Information</h2>
+      <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>Help us generate a more accurate CV and career profile.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div>
+          <label style={lbl}>Current GPA / CGPA</label>
+          <input type="number" min="0" max="4" step="0.01" value={gpa} onChange={e => setGpa(e.target.value)} placeholder="e.g. 3.20" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Certifications & Extra Qualifications</label>
+          <textarea value={quals} onChange={e => setQuals(e.target.value)} placeholder="e.g. AWS Cloud Practitioner, Google Data Analytics Certificate, Cisco CCNA..." rows={4} style={{ ...inp, resize: 'vertical', lineHeight: 1.6 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NavBtn({ children, onClick, primary }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '12px 24px', borderRadius: '10px', border: primary ? 'none' : '1px solid rgba(79,70,229,0.3)',
+      background: primary ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : 'transparent',
+      color: primary ? 'var(--text-primary)' : 'var(--primary-light)', cursor: 'pointer',
+      fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '14px',
+      boxShadow: primary ? '0 4px 16px rgba(79,70,229,0.35)' : 'none',
+    }}>{children}</button>
+  );
+}
+
 const pageStyle = { minHeight: '100vh', background: 'var(--bg-dark)', padding: '40px 20px' };
-const backBtn = { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 };
-const primaryBtn = { background: 'linear-gradient(135deg, var(--primary), var(--secondary))', color: 'var(--text-primary)', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '14px', boxShadow: '0 4px 16px rgba(79,70,229,0.35)' };
-const ghostBtn = { background: 'rgba(79,70,229,0.1)', border: '1px solid rgba(129,140,248,0.25)', color: 'var(--secondary-light)', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '14px' };
+const lbl = { display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' };
+const inp = { width: '100%', padding: '12px 16px', background: 'rgba(89, 210, 219, 0.8)', border: '1px solid rgba(79,70,229,0.2)', borderRadius: '10px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: '14px', outline: 'none' };
+
+function PageHeader({ title, subtitle, navigate, back }) {
+  return (
+    <div style={{ maxWidth: 700, margin: '0 auto 32px', padding: '0 20px' }}>
+      <button onClick={() => navigate(back)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
+        ← Back to Dashboard
+      </button>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, marginBottom: '6px' }}>{title}</h1>
+      <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{subtitle}</p>
+    </div>
+  );
+}
+
+//cd career-skill-gap\backend
+//npm start
+
+//cd "C:\Users\DELL\Documents\Y2S2\ITP Project\Project\career-skill-gap\frontend"
+//npm start
