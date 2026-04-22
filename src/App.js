@@ -11,6 +11,7 @@ import SkillGapIdentification from './components/SkillGapIdentification';
 import LearningResources from './components/LearningResources';
 import ProgressTracking from './components/ProgressTracking';
 import OnboardingChatBot from './components/OnboardingChatBot';
+import { getMyAssessment, logoutUser } from './api';
 import './App.css';
 
 export default function App() {
@@ -21,22 +22,40 @@ export default function App() {
 
   const navigate = (page) => setCurrentPage(page);
 
-  const handleLogin = (userData) => {
-  setUser(userData);
-  setShowChatBot(true);
-  navigate('dashboard');
-};
+  const hydrateAssessment = async () => {
+    try {
+      const assessment = await getMyAssessment();
+      setAssessmentData(assessment || null);
+    } catch (_err) {
+      setAssessmentData(null);
+    }
+  };
 
-  const handleRegister = (userData) => {
+  const handleLogin = async (userData) => {
+      setUser(userData);
+    await hydrateAssessment();
+      setShowChatBot(true);
+      navigate('dashboard');
+    };
+
+  const handleRegister = async (userData) => {
     setUser(userData);
+    await hydrateAssessment();
     setShowChatBot(true);
     navigate('dashboard');
   };
 
   const handleLogout = () => {
+    logoutUser();
     setUser(null);
     setAssessmentData(null);
+    setShowChatBot(false);
     navigate('landing');
+  };
+
+  const handleAssessmentComplete = async (data) => {
+    setAssessmentData(data || null);
+    await hydrateAssessment();
   };
 
   const isAuthenticated = !!user;
@@ -47,7 +66,7 @@ export default function App() {
       case 'register': return <RegisterPage navigate={navigate} onRegister={handleRegister} />;
       case 'login': return <LoginPage navigate={navigate} onLogin={handleLogin} />;
       case 'dashboard': return <Dashboard navigate={navigate} user={user} assessmentData={assessmentData} />;
-      case 'skill-assessment': return <SkillAssessment navigate={navigate} user={user} onComplete={setAssessmentData} assessmentData={assessmentData} />;
+      case 'skill-assessment': return <SkillAssessment navigate={navigate} user={user} onComplete={handleAssessmentComplete} assessmentData={assessmentData} />;
       case 'career-path': return <CareerPathMapping navigate={navigate} assessmentData={assessmentData} />;
       case 'career-recommendation': return <CareerRecommendation navigate={navigate} assessmentData={assessmentData} />;
       case 'skill-gap': return <SkillGapIdentification navigate={navigate} assessmentData={assessmentData} />;
@@ -69,16 +88,16 @@ export default function App() {
       )}
       <main className={`main-content ${isAuthenticated ? 'with-sidebar' : ''}`}>
         {renderPage()}
-        {isAuthenticated && showChatBot && !assessmentData && (
-  <OnboardingChatBot
-    userName={user?.name}
-    onComplete={(data) => {
-      setAssessmentData(data);
-      setShowChatBot(false);
-      navigate('dashboard');
-    }}
-  />
-)}
+        {isAuthenticated && showChatBot && (
+          <OnboardingChatBot
+            userName={user?.name}
+            assessmentData={assessmentData}
+            onComplete={async (data) => {
+              await handleAssessmentComplete(data);
+              navigate('career-recommendation');
+            }}
+          />
+        )}
       </main>
     </div>
   );
