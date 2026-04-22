@@ -1,0 +1,1 @@
+const fs = require('fs'); let c = fs.readFileSync('src/components/CareerPathMapping.js', 'utf8'); c = c.split('icon: c.title.includes("Engineer") ? "" : ""').join('icon: c.title.includes("Engineer") ? "" : ""'); fs.writeFileSync('src/components/CareerPathMapping.js', c);
