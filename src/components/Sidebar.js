@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SkillifyLogo from './SkillifyLogo';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: '⬡' },
@@ -12,6 +13,15 @@ const navItems = [
 
 export default function Sidebar({ currentPage, navigate, user, onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [showUserDetails, setShowUserDetails] = useState(false);
+
+  const basicDetails = [
+    { label: 'Name', value: user?.name || 'N/A' },
+    { label: 'Reg No', value: user?.regNo || 'N/A' },
+    { label: 'Email', value: user?.email || 'N/A' },
+    { label: 'Year', value: user?.year || 'N/A' },
+    { label: 'Stream', value: user?.stream || 'N/A' },
+  ];
 
   return (
     <aside style={{
@@ -28,21 +38,17 @@ export default function Sidebar({ currentPage, navigate, user, onLogout }) {
     }}>
       {/* Logo */}
       <div style={{ padding: '24px 20px', borderBottom: '1px solid rgba(79,70,229,0.15)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: '10px', flexShrink: 0,
-          background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '18px', fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)',
-          boxShadow: '0 0 20px rgba(79,70,229,0.5)',
-        }}>S</div>
-        {!collapsed && (
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.2 }}>Skillify</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>SLIIT ITP Project</div>
-          </div>
-        )}
+        <SkillifyLogo
+          size={36}
+          textSize={18}
+          showText={!collapsed}
+          subtitle={!collapsed ? 'SLIIT ITP Project' : undefined}
+        />
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => {
+            setCollapsed(!collapsed);
+            setShowUserDetails(false);
+          }}
           style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '16px', padding: '4px', flexShrink: 0 }}
         >{collapsed ? '→' : '←'}</button>
       </div>
@@ -50,18 +56,43 @@ export default function Sidebar({ currentPage, navigate, user, onLogout }) {
       {/* User Info */}
       {!collapsed && user && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(79,70,229,0.1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => setShowUserDetails((prev) => !prev)}
+            style={{
+              width: '100%',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              textAlign: 'left',
+              padding: 0,
+            }}
+            title="View basic profile details"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
               width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
               background: 'linear-gradient(135deg, var(--secondary), var(--primary))',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)',
             }}>{user.name?.charAt(0)?.toUpperCase() || 'U'}</div>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{user.name}</div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{user.regNo || 'SLIIT Student'}</div>
             </div>
-          </div>
+              <div style={{ fontSize: 12, color: '#334155', fontWeight: 700 }}>{showUserDetails ? '▲' : '▼'}</div>
+            </div>
+          </button>
+
+          {showUserDetails && (
+            <div style={{ marginTop: 12, background: 'rgba(255,255,255,0.4)', border: '1px solid rgba(79,70,229,0.18)', borderRadius: 10, padding: '10px 12px', display: 'grid', gap: 6 }}>
+              {basicDetails.map((item) => (
+                <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, color: '#334155', fontWeight: 700, letterSpacing: '0.02em' }}>{item.label}</span>
+                  <span style={{ fontSize: 11, color: '#0f172a', fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
