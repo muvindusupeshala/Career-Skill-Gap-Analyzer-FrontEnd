@@ -1,12 +1,5 @@
-import React, { useState } from 'react';
-
-const careerRequirements = {
-  'Software Engineer': { 'JavaScript / TypeScript': 3, 'React / Angular / Vue': 3, 'Node.js / Backend Dev': 3, 'SQL / Databases': 2, 'Problem Solving': 4, 'Communication': 2 },
-  'Data Analyst': { 'Python': 3, 'SQL / Databases': 4, 'Data Analysis': 4, 'Data Visualization': 3, 'Statistics & Probability': 3, 'Communication': 3 },
-  'ML/AI Engineer': { 'Python': 4, 'Machine Learning / AI': 4, 'Data Analysis': 3, 'Statistics & Probability': 4, 'SQL / Databases': 2, 'Problem Solving': 4 },
-  'DevOps Engineer': { 'Cloud Platforms (AWS/Azure/GCP)': 4, 'Docker & Kubernetes': 4, 'CI/CD Pipelines': 4, 'Linux / System Admin': 3, 'Problem Solving': 3 },
-  'Full Stack Developer': { 'JavaScript / TypeScript': 4, 'React / Angular / Vue': 3, 'Node.js / Backend Dev': 3, 'SQL / Databases': 3, 'Python': 2, 'Problem Solving': 3 },
-};
+import React, { useEffect, useMemo, useState } from 'react';
+import { generateSkillGap, getAiSkillGapInsight, getAllCareerPaths } from '../api';
 
 const levels = ['None', 'Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const gapLabel = (diff) => {
@@ -17,7 +10,72 @@ const gapLabel = (diff) => {
 };
 
 export default function SkillGapIdentification({ navigate, assessmentData }) {
-  const [targetCareer, setTargetCareer] = useState('Software Engineer');
+  const [careers, setCareers] = useState([]);
+  const [targetCareer, setTargetCareer] = useState('');
+  const [gapResult, setGapResult] = useState(null);
+  const [loadingCareers, setLoadingCareers] = useState(true);
+  const [loadingGap, setLoadingGap] = useState(false);
+  const [aiInsight, setAiInsight] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getAllCareerPaths()
+      .then((data) => {
+        if (!mounted) return;
+        const items = Array.isArray(data) ? data : [];
+        setCareers(items);
+        if (items.length > 0) setTargetCareer(items[0].title);
+      })
+      .catch((err) => {
+        console.error('Failed to load careers for gap analysis:', err);
+      })
+      .finally(() => {
+        if (mounted) setLoadingCareers(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!targetCareer || !assessmentData) return;
+    let mounted = true;
+    setLoadingGap(true);
+    setAiInsight(null);
+    generateSkillGap(targetCareer)
+      .then((data) => {
+        if (!mounted) return;
+        setGapResult(data || null);
+
+        getAiSkillGapInsight(targetCareer)
+          .then((insight) => {
+            if (mounted) setAiInsight(insight);
+          })
+          .catch((aiErr) => {
+            console.error('AI skill-gap insight unavailable:', aiErr);
+          });
+      })
+      .catch((err) => {
+        console.error('Failed to generate skill gap:', err);
+        if (mounted) setGapResult(null);
+      })
+      .finally(() => {
+        if (mounted) setLoadingGap(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [targetCareer, assessmentData]);
+
+  const gaps = useMemo(() => {
+    const list = Array.isArray(gapResult?.gaps) ? gapResult.gaps : [];
+    return [...list].sort((a, b) => (b.gap || 0) - (a.gap || 0));
+  }, [gapResult]);
+
+  const totalGap = gaps.reduce((sum, g) => sum + Math.max(0, g.gap || 0), 0);
+  const readiness = gapResult?.readinessScore ?? 0;
 
   if (!assessmentData) {
     return (
@@ -32,15 +90,6 @@ export default function SkillGapIdentification({ navigate, assessmentData }) {
     );
   }
 
-  const skills = assessmentData.skills || {};
-  const reqs = careerRequirements[targetCareer] || {};
-  const gaps = Object.entries(reqs).map(([skill, required]) => ({
-    skill, required, current: skills[skill] ?? 0, diff: required - (skills[skill] ?? 0),
-  })).sort((a, b) => b.diff - a.diff);
-
-  const totalGap = gaps.reduce((sum, g) => sum + Math.max(0, g.diff), 0);
-  const readiness = Math.max(0, Math.round(100 - (totalGap / (Object.keys(reqs).length * 4)) * 100));
-
   return (
     <div style={pageStyle}>
       <div style={{ maxWidth: 820, margin: '0 auto', padding: '0 20px' }}>
@@ -48,56 +97,83 @@ export default function SkillGapIdentification({ navigate, assessmentData }) {
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 700, marginBottom: '6px' }}>Skill Gap Identification</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '32px' }}>Compare your skills against your target career requirements</p>
 
-        {/* Career selector */}
         <div style={{ marginBottom: '28px' }}>
           <label style={lbl}>Select Target Career</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            {Object.keys(careerRequirements).map(c => (
-              <button key={c} onClick={() => setTargetCareer(c)} style={{
-                padding: '8px 18px', borderRadius: '100px', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 500,
-                background: targetCareer === c ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : 'rgba(79,70,229,0.1)',
-                color: targetCareer === c ? 'var(--text-primary)' : 'var(--primary-light)',
-                transition: 'all 0.2s',
-              }}>{c}</button>
+            {careers.map((c) => (
+              <button
+                key={c._id}
+                onClick={() => setTargetCareer(c.title)}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '100px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  background: targetCareer === c.title ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : 'rgba(79,70,229,0.1)',
+                  color: targetCareer === c.title ? 'var(--text-primary)' : 'var(--primary-light)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {c.title}
+              </button>
             ))}
           </div>
+          {loadingCareers && <div style={{ marginTop: '10px', color: 'var(--text-muted)', fontSize: '12px' }}>Loading careers...</div>}
         </div>
 
-        {/* Readiness Score */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '28px' }}>
           <StatCard label="Career Readiness" value={`${readiness}%`} color={readiness >= 70 ? '#10b981' : readiness >= 40 ? 'var(--primary-light)' : '#ef4444'} />
-          <StatCard label="Skills to Improve" value={gaps.filter(g => g.diff > 0).length} color="#f59e0b" />
-          <StatCard label="Skills on Track" value={gaps.filter(g => g.diff <= 0).length} color="#10b981" />
+          <StatCard label="Skills to Improve" value={gaps.filter((g) => (g.gap || 0) > 0).length} color="#f59e0b" />
+          <StatCard label="Skills on Track" value={gaps.filter((g) => (g.gap || 0) <= 0).length} color="#10b981" />
           <StatCard label="Total Gap Levels" value={totalGap} color="#ef4444" />
         </div>
 
-        {/* Gap visualization */}
+        {aiInsight && (
+          <div style={{ marginBottom: '22px', background: 'rgba(8,47,73,0.45)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '16px', padding: '18px 20px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>AI Gap Coach</div>
+            <p style={{ margin: 0, color: '#dbeafe', fontSize: '14px' }}>{aiInsight.prioritySummary}</p>
+
+            {Array.isArray(aiInsight.milestones) && aiInsight.milestones.length > 0 && (
+              <ul style={{ margin: '10px 0 0 0', paddingLeft: '18px', color: '#cbd5e1', fontSize: '13px' }}>
+                {aiInsight.milestones.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
+
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '28px' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700, marginBottom: '24px' }}>
-            Skill Gap: <span style={{ color: 'var(--primary-light)' }}>{targetCareer}</span>
+            Skill Gap: <span style={{ color: 'var(--primary-light)' }}>{targetCareer || 'N/A'}</span>
           </h2>
+
+          {loadingGap && <div style={{ color: 'var(--text-muted)' }}>Generating gap analysis...</div>}
+
+          {!loadingGap && gaps.length === 0 && (
+            <div style={{ color: 'var(--text-muted)' }}>No skill gap data available for this career yet.</div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {gaps.map(({ skill, required, current, diff }) => {
-              const gap = gapLabel(diff);
+            {gaps.map(({ skill, requiredLevel, currentLevel, gap }) => {
+              const diff = gap || 0;
+              const required = requiredLevel || 0;
+              const current = currentLevel || 0;
+              const label = gapLabel(diff);
               return (
                 <div key={skill}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>{skill}</span>
+                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#274f83' }}>{skill}</span>
                     <div style={{ display: 'flex', gap: '10px', fontSize: '12px', alignItems: 'center' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Need: <b style={{ color: 'var(--text-secondary)' }}>{levels[required]}</b></span>
                       <span style={{ color: 'var(--text-muted)' }}>Have: <b style={{ color: 'var(--primary-light)' }}>{levels[current]}</b></span>
-                      <span style={{ padding: '2px 8px', borderRadius: '100px', background: `${gap.color}22`, color: gap.color, fontWeight: 600, border: `1px solid ${gap.color}44` }}>{gap.text}</span>
+                      <span style={{ padding: '2px 8px', borderRadius: '100px', background: `${label.color}22`, color: label.color, fontWeight: 600, border: `1px solid ${label.color}44` }}>{label.text}</span>
                     </div>
                   </div>
                   <div style={{ height: 8, background: 'rgba(79,70,229,0.1)', borderRadius: 4, position: 'relative' }}>
-                    {/* Required bar */}
                     <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${(required / 4) * 100}%`, background: 'rgba(129,140,248,0.2)', borderRadius: 4 }} />
-                    {/* Current bar */}
                     <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${(current / 4) * 100}%`, background: diff <= 0 ? '#10b981' : diff === 1 ? '#f59e0b' : '#ef4444', borderRadius: 4, transition: 'width 0.6s ease' }} />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-                    <span style={{ fontSize: '10px', color: '#475569' }}>None</span>
-                    <span style={{ fontSize: '10px', color: '#475569' }}>Expert</span>
                   </div>
                 </div>
               );
